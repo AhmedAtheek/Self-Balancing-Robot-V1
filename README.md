@@ -1,5 +1,9 @@
 # Self-Balancing Robot V1
 
+<img width="300" alt="SELF BALANCING NEWEST NOW v42" src="https://github.com/user-attachments/assets/31e3edfb-8ad2-4ecb-965e-198cb3b56d62" />
+<img width="300" alt="photo_2025-09-23_17-21-45" src="https://github.com/user-attachments/assets/d308d0ab-ab1d-402c-942a-c00db6d4f908" />
+<img width="300" alt="photo_2025-09-23_17-21-36" src="https://github.com/user-attachments/assets/f1dfc15c-3fa4-4129-be33-5d158e9775c9" />
+
 CAD files and PCB design for a two-wheeled self-balancing robot, built and competition-tested within a **two-week timeframe**. **1st Place** — Robotics Club Self-Balancing Robot Competition 2024.
 
 ---
@@ -18,7 +22,7 @@ A modular self-balancing robot designed in Fusion 360, featuring a custom PCB an
 | IMU Sensor | MPU6050 (accelerometer + gyroscope) |
 | Motors | Cytron SPG30E-GR30 12V 37mm DC Geared Motors with Encoders |
 | Encoder Resolution | 16× GR |
-| Motor Driver | Custom PCB |
+| Motor Driver | 24V Dual Motor Driver |
 | Power | 7.4V LiPo (2S) |
 | Chassis | Modular, fully 3D printed — designed in Fusion 360 |
 
