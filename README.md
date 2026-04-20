@@ -43,5 +43,3 @@ A modular self-balancing robot designed in Fusion 360, featuring a custom PCB an
 Designed, built, and tuned independently within a two-week timeframe.
 
 ---
-
-*Part of an ongoing robotics portfolio alongside SAFMC drone competition builds.*
