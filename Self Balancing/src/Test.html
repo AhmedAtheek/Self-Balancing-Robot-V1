@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mousebot - Optimized</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <style>
+        body {
+            position: fixed;
+            font-family: Rubik;
+            color: rgb(128, 128, 128);
+            font-size: 20px;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+        }
+        h1 {
+            text-align: center;
+            margin-top: 10px;
+        }
+        .status {
+            text-align: center;
+            font-size: larger;
+            margin-bottom: 10px;
+        }
+        #connection-status {
+            font-weight: bold;
+            font-size: 20px;
+        }
+        .dashboard {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 20px;
+            font-family: Rubik;
+        }
+        .ip-input {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        #ip-address {
+            padding: 8px;
+            width: 180px;
+            font-size: 16px;
+            border: 1px solid #916d6d;
+            border-radius: 4px;
+            margin-right: 5px;
+        }
+        #connect-btn {
+            padding: 8px 15px;
+            font-size: 16px;
+            background-color: #d5347f;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #connect-btn:hover {
+            background-color: #749cf1;
+        }
+        #joystick-container {
+            width: 100%;
+            height: calc(100% - 400px);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: none;
+        }
+        .Settings {
+            text-align: center;
+            margin-bottom: 15px;
+
+        }
+
+        #TestMotors-btn {
+            padding: 8px 15px;
+            font-size: 16px;
+            background-color: #d5347f;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            
+
+        }
+        #TestMotors-btn:hover {
+            background-color: #749cf1;
+        }
+        canvas {
+            display: block;
+            touch-action: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Balancing</h1>
+    <p class="status">
+        Connection: <span id="connection-status">Disconnected</span>
+    </p>
+    <div class="ip-input">
+        <input type="text" id="ip-address" placeholder="ESP32 IP Address">
+        <button id="connect-btn" onclick="connectWebSocket()">Connect</button>
+    </div>
+    <div class="Settings">
+        <button id="TestMotors-btn">Test Motors</button>
+    </div>
+    <div class="dashboard">
+        X: <span id="x_coordinate">0</span><br>
+        Y: <span id="y_coordinate">0</span><br>
+        Speed: <span id="speed">0</span>%<br>
+        Angle: <span id="angle">0</span>°<br>
+    </div>
+    <div id="joystick-container">
+        <canvas id="canvas" name="game"></canvas>
+    </div>
+
+    <script>
+        // Initialize variables
+        var wsConnected = false;
+        var connection;
+        var lastSentTime = 0;
+        var sendInterval = 20; // Only send data every 30ms (about 33fps)
+        var pendingSend = false;
+        var lastData = { x: 0, y: 0, speed: 0, angle: 0 };
+        
+        // Load saved IP address and auto-connect if available
+        window.addEventListener('load', function() {
+            var savedIP = localStorage.getItem('mousebot_ip');
+            if (savedIP) {
+                document.getElementById('ip-address').value = savedIP;
+                // Auto-connect after a short delay to ensure the page is fully loaded
+                setTimeout(function() {
+                    connectWebSocket();
+                }, 500);
+            }
+        });
+        
+        function connectWebSocket() {
+            console.log("Connect button clicked");
+            
+            // Close existing connection if any
+            if (connection) {
+                connection.close();
+            }
+            
+            // Get IP address from input field
+            var ipInput = document.getElementById('ip-address');
+            var host = '';
+            
+            if (ipInput && ipInput.value && ipInput.value.trim() !== '') {
+                // Use the manually entered IP address
+                host = ipInput.value.trim();
+                console.log("Using entered IP:", host);
+                localStorage.setItem('mousebot_ip', host); // Save for next time
+            } else {
+                // No IP in input field, try to use saved IP
+                host = localStorage.getItem('mousebot_ip');
+                console.log("No IP entered, using saved IP:", host);
+                
+                // If no saved IP, prompt user
+                if (!host) {
+                    host = prompt('Enter ESP32 IP address:', '192.168.1.100');
+                    console.log("Prompted for IP, got:", host);
+                    if (host) {
+                        localStorage.setItem('mousebot_ip', host);
+                        if (ipInput) ipInput.value = host;
+                    } else {
+                        console.log("User canceled IP prompt");
+                        return; // User canceled prompt
+                    }
+                } else if (ipInput) {
+                    ipInput.value = host; // Update input field with saved IP
+                }
+            }
+            
+            // Make sure we have a valid host
+            if (!host || host.trim() === '') {
+                alert("Please enter a valid IP address");
+                return;
+            }
+            
+            // Update status
+            document.getElementById('connection-status').textContent = 'Connecting...';
+            document.getElementById('connection-status').style.color = 'orange';
+            
+            console.log("Creating WebSocket connection to:", host);
+            
+            // Create WebSocket connection
+            try {
+                connection = new WebSocket('ws://' + host + ':81/', ['arduino']);
+                
+                connection.onopen = function() {
+                    console.log('WebSocket Connected to ' + host);
+                    document.getElementById('connection-status').textContent = 'Connected to ' + host;
+                    document.getElementById('connection-status').style.color = 'green';
+                    wsConnected = true;
+                    connection.send('Connect ' + new Date());
+                };
+                
+                connection.onerror = function(error) {
+                    console.log('WebSocket Error ', error);
+                    document.getElementById('connection-status').textContent = 'Connection Error';
+                    document.getElementById('connection-status').style.color = 'red';
+                    wsConnected = false;
+                };
+                
+                connection.onclose = function() {
+                    console.log('WebSocket Closed');
+                    document.getElementById('connection-status').textContent = 'Disconnected';
+                    document.getElementById('connection-status').style.color = 'red';
+                    wsConnected = false;
+                };
+                
+                connection.onmessage = function(e) {
+                    console.log('Server: ', e.data);
+                };
+            } catch (error) {
+                console.error("WebSocket creation error:", error);
+                alert("Failed to connect to WebSocket. Check if the IP address is correct.");
+                document.getElementById('connection-status').textContent = 'Connection Failed';
+                document.getElementById('connection-status').style.color = 'red';
+            }
+        }
+
+        // Throttled send function to reduce WebSocket traffic
+        function throttledSend(x, y, speed, angle) {
+            // Always update the last data
+            lastData.x = x;
+            lastData.y = y;
+            lastData.speed = speed;
+            lastData.angle = angle;
+            
+            // Update UI immediately for responsiveness
+            updateUI(x, y, speed, angle);
+            
+            // Check if we should send now
+            var now = Date.now();
+            if (now - lastSentTime >= sendInterval) {
+                sendData();
+            } else if (!pendingSend) {
+                // Schedule a send if one isn't already scheduled
+                pendingSend = true;
+                setTimeout(sendData, sendInterval - (now - lastSentTime));
+            }
+        }
+        
+        function sendData() {
+            if (wsConnected) {
+                var data = JSON.stringify(lastData);
+                connection.send(data);
+            }
+            lastSentTime = Date.now();
+            pendingSend = false;
+        }
+        
+        function updateUI(x, y, speed, angle) {
+            document.getElementById("x_coordinate").innerText = x;
+            document.getElementById("y_coordinate").innerText = y;
+            document.getElementById("speed").innerText = speed;
+            document.getElementById("angle").innerText = angle;
+        }
+
+        // Joystick code
+        var canvas, ctx;
+        var containerDiv;
+
+        window.addEventListener('load', () => {
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            containerDiv = document.getElementById('joystick-container');
+            resize(); 
+
+            // Add event listeners only to the canvas element
+            canvas.addEventListener('mousedown', startDrawing);
+            window.addEventListener('mouseup', stopDrawing); // Need this on window for when mouse goes outside canvas
+            canvas.addEventListener('mousemove', Draw);
+
+            canvas.addEventListener('touchstart', startDrawing);
+            window.addEventListener('touchend', stopDrawing);
+            window.addEventListener('touchcancel', stopDrawing);
+            canvas.addEventListener('touchmove', Draw);
+            
+            window.addEventListener('resize', resize);
+
+            // Initialize values
+            updateUI(0, 0, 0, 0);
+        });
+
+        var width, height, radius, x_orig, y_orig;
+        function resize() {
+            // Get container dimensions
+            var containerWidth = containerDiv.clientWidth;
+            var containerHeight = containerDiv.clientHeight;
+            
+            // Set canvas dimensions to match container
+            canvas.width = containerWidth;
+            canvas.height = containerHeight;
+            
+            width = containerWidth;
+            height = containerHeight;
+            radius = Math.min(150, width / 4, height / 4); // Adjust radius based on container size
+            
+            x_orig = width / 2;
+            y_orig = height / 2;
+            
+            background();
+            joystick(x_orig, y_orig); // Center the joystick
+        }
+
+        function background() {
+            ctx.clearRect(0, 0, width, height);
+            ctx.beginPath();
+            ctx.arc(x_orig, y_orig, radius + 20, 0, Math.PI * 2, true);
+            ctx.fillStyle = '#ECE5E5';
+            ctx.fill();
+        }
+
+        function joystick(x, y) {
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2, true);
+            ctx.fillStyle = '#F08080';
+            ctx.fill();
+            ctx.strokeStyle = '#F6ABAB';
+            ctx.lineWidth = 8;
+            ctx.stroke();
+        }
+
+        let coord = { x: 0, y: 0 };
+        let paint = false;
+
+        function getPosition(event) {
+            // Prevent default behavior on canvas
+            event.preventDefault();
+            
+            var rect = canvas.getBoundingClientRect();
+            var clientX = event.clientX || (event.touches && event.touches[0].clientX);
+            var clientY = event.clientY || (event.touches && event.touches[0].clientY);
+            
+            coord.x = clientX - rect.left;
+            coord.y = clientY - rect.top;
+        }
+
+        function is_it_in_the_circle() {
+            var current_radius = Math.sqrt(Math.pow(coord.x - x_orig, 2) + Math.pow(coord.y - y_orig, 2));
+            return radius >= current_radius;
+        }
+
+        function startDrawing(event) {
+            getPosition(event);
+            
+            // Only start drawing if click is in the circle
+            if (is_it_in_the_circle()) {
+                paint = true;
+                background();
+                joystick(coord.x, coord.y);
+                Draw(event);
+            }
+        }
+
+        function stopDrawing(event) {
+            if (paint) {
+                paint = false;
+                background();
+                joystick(x_orig, y_orig);
+                
+                // Send stop command to the ESP32
+                throttledSend(0, 0, 0, 0);
+            }
+        }
+
+        function Draw(event) {
+            if (!paint) return;
+            
+            getPosition(event);
+            
+            var angle = Math.atan2((coord.y - y_orig), (coord.x - x_orig));
+            var angle_in_degrees;
+            
+            if (Math.sign(angle) == -1) {
+                angle_in_degrees = Math.round(-angle * 180 / Math.PI);
+            } else {
+                angle_in_degrees = Math.round(360 - angle * 180 / Math.PI);
+            }
+
+            var x, y;
+            if (is_it_in_the_circle()) {
+                x = coord.x;
+                y = coord.y;
+            } else {
+                // Limit to edge of circle
+                x = radius * Math.cos(angle) + x_orig;
+                y = radius * Math.sin(angle) + y_orig;
+            }
+
+            // Redraw background and joystick
+            background();
+            joystick(x, y);
+
+            // Calculate speed based on distance from center
+            var speed = Math.round(100 * Math.sqrt(Math.pow(x - x_orig, 2) + Math.pow(y - y_orig, 2)) / radius);
+            var x_relative = Math.round(x - x_orig);
+            var y_relative = Math.round(y - y_orig);
+            
+            // Send data with throttling
+            throttledSend(x_relative, y_relative, speed, angle_in_degrees);
+        }
+    </script>
+</body>
+</html>
